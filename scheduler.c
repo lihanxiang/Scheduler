@@ -10,39 +10,59 @@
 #include<time.h>
 #include<math.h>
 
+// signal handler
+void term_handler(int sig_num);
+void tstp_handler(int sig_num);
+void cont_handler(int sig_num);
+
+// read lines from file
 int read_line(FILE* fin);
+
+// trim the lines into three parts
 void read_file(FILE* fin, int* arrival_time, char* command[], int* duration);
+
+// trim the command into an array
 void get_command_array(char* command, char* command_array[]);
+
+/* execute the whole job,
+ * for FCFS and SJF
+ */
 int execute_whole_job(char* command, int duration);
+
+/* execute a part of the job,
+ * for RR
+ */
 void execute_part_job(char* command, int duration, int lines, int round_time);
+
+// change the format from clock_t to double
 double get_time(clock_t time);
+
+// get the total elapsed time
+int get_total_time(int* arrival_time, int* duration, int lines, int time_used);
+
+// print the first part of Gantt Chart
 void print_chart(int total_time);
 
+// FCFS policy
 void fcfs(int* arrival_time, char* command[], int* duration, int lines);
+
+// Shortest Job First policy
 void sjf(int* arrival_time, char* command[], int* duration, int lines);
+
+// Round Robin
 void rr(int* arrival_time, char* command[], int* duration, int lines, int round_time);
+
+// get the minimum value
 int min(int i, int j);
+
+/* get the shortest job
+ * according to the elapsed time
+ */
 int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used, int* executed);
 
+
+
 int child = 0;
-
-void term_handler(int sig_num){
-	if (child != 0){
-		kill(child, SIGTERM);
-	}
-}
-
-void tstp_handler(int sig_num){
-	if (child != 0){
-		kill(child, SIGTSTP);
-	}
-}
-
-void cont_handler(int sig_num){
-	if (child != 0){
-		kill(child, SIGCONT);
-	}
-}
 
 void main(int argc, char* argv[]){
 	FILE *fin = fopen("job.txt", "r");
@@ -60,9 +80,27 @@ void main(int argc, char* argv[]){
 	char line[1024];
 	int index = 0;
 	read_file(fin, arrival_time, command, duration);
-	sjf(arrival_time, command, duration, lines);
+	//sjf(arrival_time, command, duration, lines);
 	//rr(arrival_time, command, duration, lines, 2);
-	//fcfs(arrival_time, command, duration, lines);
+	fcfs(arrival_time, command, duration, lines);
+}
+
+void term_handler(int sig_num){
+	if (child != 0){
+		kill(child, SIGTERM);
+	}
+}
+
+void tstp_handler(int sig_num){
+	if (child != 0){
+		kill(child, SIGTSTP);
+	}
+}
+
+void cont_handler(int sig_num){
+	if (child != 0){
+		kill(child, SIGCONT);
+	}
 }
 
 int read_line(FILE* fin){
@@ -173,7 +211,19 @@ void execute_part_job(char* command, int duration, int lines, int round_time){
 	//return (int)ceil(get_time(end - start));
 }
 
-
+int get_total_time(int* arrival_time, int* duration, int lines, int time_used){
+	int i;
+	int total_time = arrival_time[0];
+	for (i = 0; i < lines; i++){
+		if (i > 0 && arrival_time[i] > time_used){
+			total_time = arrival_time[i] + duration[i];
+		} else {
+			total_time += duration[i];
+		}
+		time_used = total_time;
+	}
+	return total_time;
+}
 
 void print_chart(int total_time){
 	int i;
@@ -213,14 +263,7 @@ void fcfs(int* arrival_time, char* command[], int* duration, int lines){
 		begin += duration[i];
 
 	}
-	for (i = 0; i < lines; i++){
-		if (i > 0 && arrival_time[i] > time_used){
-			total_time = arrival_time[i] + duration[i];
-		} else {
-			total_time += duration[i];
-		}
-		time_used = total_time;
-	}
+	total_time = get_total_time(arrival_time, duration, lines, time_used);
 	int time[total_time];
 	for (i = 0; i < total_time; i++){
 		time[i] = 0;
@@ -303,9 +346,7 @@ void fcfs(int* arrival_time, char* command[], int* duration, int lines){
 
 void rr(int* arrival_time, char* command[], int* duration, int lines, int round_time){
 	int i = 0;	
-	printf("Gantt Chart\n");
-	printf("===========\n");
-	printf("  Time   | ");
+
 	int total_time = arrival_time[0];
 	int time_used = 0;
 	for (; i < lines; i++){
