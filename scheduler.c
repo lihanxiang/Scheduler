@@ -43,6 +43,12 @@ int get_total_time(int* arrival_time, int* duration, int lines, int time_used);
 // print the first part of Gantt Chart
 void print_chart(int total_time);
 
+// print the job-execute time
+void print_time(int* arrival_time, int* duration, int lines, int* order);
+
+// print the mixed time
+void print_mixed_time(int* arrival_time, int total_time, int* time);
+
 // FCFS policy
 void fcfs(int* arrival_time, char* command[], int* duration, int lines);
 
@@ -80,9 +86,9 @@ void main(int argc, char* argv[]){
 	char line[1024];
 	int index = 0;
 	read_file(fin, arrival_time, command, duration);
-	//sjf(arrival_time, command, duration, lines);
+	sjf(arrival_time, command, duration, lines);
 	//rr(arrival_time, command, duration, lines, 2);
-	fcfs(arrival_time, command, duration, lines);
+	//fcfs(arrival_time, command, duration, lines);
 }
 
 void term_handler(int sig_num){
@@ -126,7 +132,7 @@ void read_file(FILE* fin, int* arrival_time, char* command[], int* duration){
 		strncpy(temp, token, n + 1);
 		command[index] = temp;
 		token = strtok(NULL, "\t");
-		duration[index++] = atoi(token);	
+		duration[index++] = atoi(token);
 	}
 	fclose(fin);
 }
@@ -163,7 +169,7 @@ int execute_whole_job(char* command, int duration){
 	get_command_array(command, command_array);
 	clock_t start, end;
 	struct tms tmp;
-	if (duration != -1){
+	if (duration != -1 || duration != INT_MAX){
 		alarm(duration);
 	}
 	start = times(&tmp);
@@ -225,12 +231,27 @@ int get_total_time(int* arrival_time, int* duration, int lines, int time_used){
 	return total_time;
 }
 
+int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used, int* executed){
+	int i;
+	int min = INT_MAX;
+	int index = 0;
+	for (i = 0; i < lines; i++){
+		if (executed[i] == 0 && arrival_time[i] <= time_used && duration[i] < min){
+			min = duration[i];
+			index = i;
+		}
+	}
+	executed[index] = 1;
+	return index;
+}
+
 void print_chart(int total_time){
+	printf("total = %d\n", total_time);
 	int i;
 	printf("Gantt Chart\n");
 	printf("===========\n");
 	printf("  Time   | ");
-	for (i = 0; i <= total_time / 10; i++){
+	for (i = 0; i <= (total_time - 1) / 10; i++){
 		printf("%d                   ", i);
 	}
 	printf("\n           ");
@@ -243,94 +264,37 @@ void print_chart(int total_time){
 	}
 }
 
-void fcfs(int* arrival_time, char* command[], int* duration, int lines){
+void print_time(int* arrival_time, int* duration, int lines, int* order){
 	int i;
-	int total_time = arrival_time[0];
-	int time_used = 0;
-	int begin = 0;
-	/* use the real time to replace
-	 * the time in job.txt
-	 */
-	for (i = 0; i < lines; i++){
-		if (arrival_time[i] > begin){
-			sleep(arrival_time[i] - begin);
-			begin = arrival_time[i];
-		}
-		int real_time = execute_whole_job(command[i], duration[i]);
-		if (real_time < duration[i] || duration[i] == -1){
-			duration[i] = real_time;
-		}
-		begin += duration[i];
-
-	}
-	total_time = get_total_time(arrival_time, duration, lines, time_used);
-	int time[total_time];
-	for (i = 0; i < total_time; i++){
-		time[i] = 0;
-	}
-
-	/* calculate the mixed
-	 * graph number
-	 */
-	begin = 0;
-	for (i = 0; i < lines; i++){
-		int j;
-		if (arrival_time[i] > begin){
-			begin = arrival_time[i];
-		}
-		for (j = begin; j < begin + duration[i]; j++){
-			time[j] = i + 1;
-		}
-		begin = j;
-	}
-	print_chart(total_time);
-
-	/*for (i = 0; i < lines; i++){
-		int job_num = i + 1;
-		printf("\n  Job %d  | ", job_num);
-		int j;
-		for (j = 0; j < arrival_time[i]; j++){
-			printf("  ");
-		}
-		for (j = 0; j < total_time; j++){
-			if (arrival_time[i] < j && time[j] < job_num){
-				printf(". ");
-			} else if (time[j] == job_num){
-				printf("# ");
-			}
-		}
-		printf("\n");
-		
-	}*/
-
-	/* stop means the time when you finish this task, 
-	 * it need to be used as the startpoint in next task
-	 */
-
 	int stop = arrival_time[0];
 	for (i = 0; i < lines; i++){
-		printf("\n  Job %d  | ", i + 1);
+		int job_num = order[i];
+		printf("\n  Job %d  | ", job_num + 1);
 		int j = 0;
-		for (; j < arrival_time[i]; j++){
+		for (; j < arrival_time[job_num]; j++){
 			printf("  ");
 		}
 		if (i == 0){
-			for (j = arrival_time[0]; j < arrival_time[0] + duration[0]; j++){
+			for (j = arrival_time[job_num]; j < arrival_time[job_num] + duration[job_num]; j++){
 				printf("# ");
 			}
 			stop = j;
 		} else {
-			int k = arrival_time[i];
+			int k = arrival_time[job_num];
 			for (; k < stop; k++){
 				printf(". ");
 			}
-			for (k = stop; k < stop + duration[i]; k++){
+			for (k = stop; k < stop + duration[job_num]; k++){
 				printf("# ");
 			}
 			stop = k;
 		}
-	}
-	printf("\n  Mixed  | "); 
+	}	
+}
+
+void print_mixed_time(int* arrival_time, int total_time, int* time){
+	int i;
+	printf("\n  Mixed  | ");
 	for (i = 0; i < arrival_time[0]; i++){
 		printf("  ");
 	}
@@ -342,6 +306,49 @@ void fcfs(int* arrival_time, char* command[], int* duration, int lines){
 		}
 	}
 	printf("\n");
+}
+
+void fcfs(int* arrival_time, char* command[], int* duration, int lines){
+	int i;
+	int time_used = 0;
+	int begin = 0;
+	int order[lines];
+
+	for (i = 0; i < lines; i++){
+		if (arrival_time[i] > begin){
+			sleep(arrival_time[i] - begin);
+			begin = arrival_time[i];
+		}
+		order[i] = i;
+		int real_time = execute_whole_job(command[i], duration[i]);
+		if (real_time < duration[i] || duration[i] == -1){
+			duration[i] = real_time;
+		}
+		begin += duration[i];
+
+	}
+	
+	int total_time = get_total_time(arrival_time, duration, lines, time_used);
+	int time[total_time];
+	for (i = 0; i < total_time; i++){
+		time[i] = 0;
+	}
+	
+	begin = 0;
+	for (i = 0; i < lines; i++){
+		int j;
+		if (arrival_time[i] > begin){
+			begin = arrival_time[i];
+		}
+		for (j = begin; j < begin + duration[i]; j++){
+			time[j] = order[i] + 1;
+		}
+		begin = j;
+	}
+
+	print_chart(total_time);
+	print_time(arrival_time, duration, lines, order);
+	print_mixed_time(arrival_time, total_time, time);
 }
 
 void rr(int* arrival_time, char* command[], int* duration, int lines, int round_time){
@@ -384,105 +391,107 @@ int min(int i, int j){
 	}
 }
 
-int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used, int* executed){
-	int i;
-	int min = INT_MAX;
-	int index = 0;
-	for (i = 0; i < lines; i++){
-		if (executed[i] == 0 && arrival_time[i] <= time_used && duration[i] < min){
-			min = duration[i];
-			index = i;
-		}
-	}
-	executed[index] = 1;
-	return index;
-}
-
 void sjf(int* arrival_time, char* command[], int* duration, int lines){
-	int i = 0;
-	int used[lines];
-	int mini_cost;
-	int time_used = arrival_time[0];
-	int index;
+	
+	int i;
+	int time_used = 0;
+	int begin = 0;
 	int order[lines];
 	int executed[lines];
 	for (i = 0; i < lines; i++){
 		executed[i] = 0;
-	}
-	for (i = 0; i < lines; i++){
-		int next = get_shortest_job(arrival_time, duration, lines, time_used, executed);
-		execute_whole_job(command[next], duration[next]);
-		if (arrival_time[i] > time_used){
-			time_used = arrival_time[i];
+		if (duration[i] == -1){
+			duration[i] = INT_MAX - 1;
 		}
-		time_used += duration[i];
 	}
 
-        printf("Gantt Chart\n");
-        printf("===========\n");
-        printf("  Time   | ");
-        int total_time = arrival_time[0];
-	time_used = 0;
-        for (; i < lines; i++){
-		if (i > 0 && arrival_time[i] > time_used){
-			total_time = arrival_time[i] + duration[i];
-		} else {
-			total_time += duration[i];
-		}
-		time_used = total_time;
-	}              
-       	for (i = 0; i <= total_time / 10; i++){
-		printf("%d                   ", i);
-	}
-        printf("\n           ");
-        for (i = 0; i < total_time; i++){
-		printf("%d ", i % 10);
-	}
-        printf("\n---------+-");
-        for (i = 0; i < total_time; i++){
-		printf("- ");
-	}
 	for (i = 0; i < lines; i++){
-		printf("%d\n", order[i] + 1);
+		if (arrival_time[i] > begin){
+			sleep(arrival_time[i] - begin);
+			begin = arrival_time[i];
+		}
+		int next = get_shortest_job(arrival_time, duration, lines, begin, executed);
+		order[i] = next;
+		int real_time = execute_whole_job(command[next], duration[next]);
+		if (real_time < duration[next]){
+			duration[next] = real_time;
+		}
+		begin += duration[next];
 	}
+
+	int total_time = get_total_time(arrival_time, duration, lines, time_used);
 	int time[total_time];
 	for (i = 0; i < total_time; i++){
 		time[i] = 0;
 	}
 
-	int stop = arrival_time[0];
+
+	begin = 0;
 	for (i = 0; i < lines; i++){
-		printf("\n  Job %d  | ", i + 1);
-		int j = 0;
-		for (; j < arrival_time[i]; j++){
-			printf("  ");
+		int j;
+		if (arrival_time[i] > begin){
+			begin = arrival_time[i];
 		}
-		if (i == 0){
-			for (j = arrival_time[0]; j < arrival_time[0] + duration[0]; j++){
-				printf("# ");
-			}
-			stop = j;
-		} else {
-			int k = arrival_time[i];
-			for (; k < stop; k++){
-				printf(". ");
-			}
-			for (k = stop; k < stop + duration[i]; k++){
-				printf("# ");
-			}
-			stop = k;
+		for (j = begin; j < begin + duration[order[i]]; j++){
+			time[j] = order[i] + 1;
 		}
+		begin = j;
 	}
-	printf("\n  Mixed  | ");
-	for (i = 0; i < arrival_time[0]; i++){
-		printf("  i");
+
+
+	print_chart(total_time);
+	print_time(arrival_time, duration, lines, order);
+	print_mixed_time(arrival_time, total_time, time);
+
+
+
+	
+	
+	/*int i = 0;
+	int used[lines];
+	int mini_cost;
+	int index;
+	int order[lines];
+	int executed[lines];
+	int begin = 0;
+	int time_used = 0;
+	for (i = 0; i < lines; i++){
+		executed[i] = 0;
 	}
-	for (i = arrival_time[0]; i < total_time; i++){
-		if (time[i] == 0){
-			printf("  ");
-		} else {
-			printf("%d ", time[i]);
+	for (i = 0; i < lines; i++){
+		if (arrival_time[i] > begin){
+			sleep(arrival_time[i] - begin);
+			begin = arrival_time[i];
 		}
+		int next = get_shortest_job(arrival_time, duration, lines, begin, executed);
+		order[i] = next;
+		int real_time = execute_whole_job(command[next], duration[next]);
+		if (real_time < duration[i] || duration[i] == -1){
+			duration[i] = real_time;
+		}
+		begin += duration[i];
 	}
-	printf("\n");
+
+	int total_time = get_total_time(arrival_time, duration, lines, time_used);
+	int time[total_time];
+	for (i = 0; i < total_time; i++){
+		time[i] = 0;
+	}
+
+	begin = 0;
+	for (i = 0; i < lines; i++){
+		int j;
+		if (arrival_time[i] > begin){
+			begin = arrival_time[i];
+		}
+		for (j = begin; j < begin + duration[i]; j++){
+			time[j] = order[i] + 1;
+		}
+		begin = j;
+	}
+
+
+	print_chart(total_time);
+	print_time(arrival_time, duration, lines, order);
+	print_mixed_time(arrival_time, total_time, time);*/
 }
