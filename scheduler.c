@@ -1,3 +1,8 @@
+/*	李汉祥 1609853F-I011-0020
+ *	潘晋锐 1609853C-I011-0010
+ *	张展雷 16098532-I011-0010
+ */
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<signal.h>
@@ -60,7 +65,6 @@ int min(int i, int j);
  * according to the elapsed time
  */
 int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used, int* executed);
-
 
 
 int child = 0;
