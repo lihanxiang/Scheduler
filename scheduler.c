@@ -27,12 +27,7 @@ void get_command_array(char* command, char* command_array[]);
 /* execute the whole job,
  * for FCFS and SJF
  */
-int execute_whole_job(char* command, int duration);
-
-/* execute a part of the job,
- * for RR
- */
-void execute_part_job(char* command, int duration, int lines, int round_time);
+int execute_job(char* command, int duration);
 
 // change the format from clock_t to double
 double get_time(clock_t time);
@@ -71,7 +66,8 @@ int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used,
 int child = 0;
 
 void main(int argc, char* argv[]){
-	FILE *fin = fopen("job.txt", "r");
+	char* file_name = argv[1];
+	FILE *fin = fopen(file_name, "r");
 	int lines = read_line(fin);
 
 	int arrival_time[lines];
@@ -81,14 +77,20 @@ void main(int argc, char* argv[]){
 		command[i] = (char*)malloc(255);
 	}
 	
-	fin = fopen("job.txt", "r");
+	fin = fopen(file_name, "r");
 	char* token;
 	char line[1024];
 	int index = 0;
 	read_file(fin, arrival_time, command, duration);
-	sjf(arrival_time, command, duration, lines);
-	//rr(arrival_time, command, duration, lines, 2);
-	//fcfs(arrival_time, command, duration, lines);
+	if (strcmp(argv[2], "FCFS") == 0){
+		fcfs(arrival_time, command, duration, lines);
+	} 
+	if (strcmp(argv[2], "RR") == 0){
+		rr(arrival_time, command, duration, lines, 2);
+	}
+       	if (strcmp(argv[2], "SJF") == 0){
+		sjf(arrival_time, command, duration, lines);
+	}
 }
 
 void term_handler(int sig_num){
@@ -156,7 +158,7 @@ double get_time(clock_t time){
 	return (double)time / t;
 }
 
-int execute_whole_job(char* command, int duration){
+int execute_job(char* command, int duration){
 	signal(SIGTERM, term_handler);
 	signal(SIGTSTP, tstp_handler);
 	signal(SIGCONT, cont_handler);
@@ -181,40 +183,6 @@ int execute_whole_job(char* command, int duration){
 	wait(NULL);
 	end = times(&tmp);
 	return (int)ceil(get_time(end - start));
-}
-
-void execute_part_job(char* command, int duration, int lines, int round_time){
-	signal(SIGTERM, term_handler);
-	signal(SIGTSTP, tstp_handler);
-	signal(SIGCONT, cont_handler);
-	signal(SIGALRM, cont_handler);
-	char* command_array[100];
-	int j;
-	for (j = 0; j < 100; j++){
-		command_array[j] = (char*)malloc(100);
-	}
-	get_command_array(command, command_array);
-	clock_t start, end;
-	struct tms tmp;
-	int job[lines];
-	for (j = 0; j < lines; j++){
-		job[j] = fork();
-		kill(job[j], SIGTSTP);
-	}
-	
-	for (j = 0; j < lines * round_time; j++){
-		start = times(&tmp);
-		child = job[j];
-		kill(job[j], SIGCONT);
-		alarm(round_time);
-		if (child == 0){
-			execvp(command_array[0], command_array);
-		}
-		exit(EXIT_SUCCESS);
-		wait(NULL);
-		end = times(&tmp);
-	}
-	//return (int)ceil(get_time(end - start));
 }
 
 int get_total_time(int* arrival_time, int* duration, int lines, int time_used){
@@ -246,7 +214,6 @@ int get_shortest_job(int* arrival_time, int* duration, int lines, int time_used,
 }
 
 void print_chart(int total_time){
-	printf("total = %d\n", total_time);
 	int i;
 	printf("Gantt Chart\n");
 	printf("===========\n");
@@ -320,7 +287,7 @@ void fcfs(int* arrival_time, char* command[], int* duration, int lines){
 			begin = arrival_time[i];
 		}
 		order[i] = i;
-		int real_time = execute_whole_job(command[i], duration[i]);
+		int real_time = execute_job(command[i], duration[i]);
 		if (real_time < duration[i] || duration[i] == -1){
 			duration[i] = real_time;
 		}
@@ -351,36 +318,70 @@ void fcfs(int* arrival_time, char* command[], int* duration, int lines){
 	print_mixed_time(arrival_time, total_time, time);
 }
 
-void rr(int* arrival_time, char* command[], int* duration, int lines, int round_time){
-	int i = 0;	
-
-	int total_time = arrival_time[0];
-	int time_used = 0;
-	for (; i < lines; i++){
-		if (i > 0 && arrival_time[i] > time_used){
-			total_time = arrival_time[i] + duration[i];
-		} else {
-			total_time += duration[i];
-		}
-		time_used = total_time;
-	}		for (i = 0; i <= total_time / 10; i++){
-		printf("%d                   ", i);
-	}
-	printf("\n           ");
-	for (i = 0; i < total_time; i++){
-		printf("%d ", i % 10);
-	}
-	printf("\n---------+-");
-	for (i = 0; i < total_time; i++){
-		printf("- ");
-	}
-	int stop = arrival_time[0];
+void print_RR_time(int* arrival_time, int* duration, int lines, int* time, int total_time){
+	int i;
 	for (i = 0; i < lines; i++){
 		printf("\n  Job %d  | ", i + 1);
-		int j = 0;
-		
+		int j;
+		for (j = 0; j < arrival_time[i]; j++){
+			printf("  ");
+		}
+		for (j; j < total_time; j++){
+			 if (time[j] == i + 1){
+				printf("# ");
+				duration[i]--;
+			} else if (time[j] != 0 && (time[j] <= i + 1) || (time[j] > i && duration[i] > 0)){
+				printf(". ");
+			} else {
+				printf("  ");
+			}
+		}
 	}
-	printf("\n");
+}
+
+void rr(int* arrival_time, char* command[], int* duration, int lines, int round_time){
+	int i;
+	int begin = 0;
+	int time_used = 0;
+
+	for (i = 0; i < lines; i++){
+		if (arrival_time[i] > begin){
+			sleep(arrival_time[i] - begin);
+			begin = arrival_time[i];
+		}
+		int real_time = execute_job(command[i], duration[i]);
+		if (real_time < duration[i] || duration[i] == -1){
+			duration[i] = real_time;
+		}
+		begin += duration[i];
+	}
+	int total_time = get_total_time(arrival_time, duration, lines, time_used);
+	int time[total_time];
+	for (i = 0; i < total_time; i++){
+		time[i] = 0;
+	}
+	int temp[lines];
+	for (i = 0; i < lines; i++){
+		temp[i] = duration[i];
+	}
+	begin = 0;
+	int index = 0;
+	int round = 1;
+	for (i = arrival_time[0]; i < total_time; i += round){
+		int j;
+		if (index >= lines){
+			index = 0;
+		}
+		round = min(round_time, temp[index]);
+		for (j = i; j < i + round; j++){
+			time[j] = index + 1;
+		}
+		temp[index] -= round;
+		index++;
+	}
+	print_chart(total_time);
+	print_RR_time(arrival_time, duration, lines, time, total_time);
+	print_mixed_time(arrival_time, total_time, time);
 }
 
 int min(int i, int j){
@@ -412,7 +413,7 @@ void sjf(int* arrival_time, char* command[], int* duration, int lines){
 		}
 		int next = get_shortest_job(arrival_time, duration, lines, begin, executed);
 		order[i] = next;
-		int real_time = execute_whole_job(command[next], duration[next]);
+		int real_time = execute_job(command[next], duration[next]);
 		if (real_time < duration[next]){
 			duration[next] = real_time;
 		}
@@ -442,56 +443,4 @@ void sjf(int* arrival_time, char* command[], int* duration, int lines){
 	print_chart(total_time);
 	print_time(arrival_time, duration, lines, order);
 	print_mixed_time(arrival_time, total_time, time);
-
-
-
-	
-	
-	/*int i = 0;
-	int used[lines];
-	int mini_cost;
-	int index;
-	int order[lines];
-	int executed[lines];
-	int begin = 0;
-	int time_used = 0;
-	for (i = 0; i < lines; i++){
-		executed[i] = 0;
-	}
-	for (i = 0; i < lines; i++){
-		if (arrival_time[i] > begin){
-			sleep(arrival_time[i] - begin);
-			begin = arrival_time[i];
-		}
-		int next = get_shortest_job(arrival_time, duration, lines, begin, executed);
-		order[i] = next;
-		int real_time = execute_whole_job(command[next], duration[next]);
-		if (real_time < duration[i] || duration[i] == -1){
-			duration[i] = real_time;
-		}
-		begin += duration[i];
-	}
-
-	int total_time = get_total_time(arrival_time, duration, lines, time_used);
-	int time[total_time];
-	for (i = 0; i < total_time; i++){
-		time[i] = 0;
-	}
-
-	begin = 0;
-	for (i = 0; i < lines; i++){
-		int j;
-		if (arrival_time[i] > begin){
-			begin = arrival_time[i];
-		}
-		for (j = begin; j < begin + duration[i]; j++){
-			time[j] = order[i] + 1;
-		}
-		begin = j;
-	}
-
-
-	print_chart(total_time);
-	print_time(arrival_time, duration, lines, order);
-	print_mixed_time(arrival_time, total_time, time);*/
 }

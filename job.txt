@@ -1,4 +1,4 @@
-1	ls	6
-1	./timer	2
-1	./while1	3
-1	./timer	3
+1	ls	10
+2	./timer	3
+3	./while1	3
+4	./timer	-1
